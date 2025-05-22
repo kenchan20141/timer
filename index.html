@@ -55,10 +55,27 @@
             height: 100%;
             z-index: -1;
         }
-        #startButton {
+        #mainContainer {
             position: absolute;
-            bottom: 20px;
-            right: 20px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(255, 255, 255, 0.9);
+            padding: 20px;
+            border-radius: 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            z-index: 2;
+        }
+        #countdownDisplay {
+            font-size: 100px;
+            font-weight: bold;
+            color: white;
+            text-shadow: 2px 2px 4px black;
+            margin-bottom: 20px;
+        }
+        #startButton {
             width: 50px;
             height: 50px;
             border-radius: 50%;
@@ -66,6 +83,7 @@
             border: none;
             cursor: pointer;
             transition: transform 0.2s;
+            position: relative;
         }
         #startButton:hover {
             transform: scale(1.1);
@@ -78,23 +96,69 @@
             left: 50%;
             transform: translate(-50%, -50%);
         }
+        @media (max-width: 600px) {
+            #mainContainer {
+                padding: 10px;
+            }
+            #countdownDisplay {
+                font-size: 60px;
+            }
+            #startButton {
+                width: 40px;
+                height: 40px;
+            }
+            #startButton svg {
+                width: 20px;
+                height: 20px;
+            }
+        }
+        @media (min-width: 601px) and (max-width: 1024px) {
+            #countdownDisplay {
+                font-size: 80px;
+            }
+            #startButton {
+                width: 50px;
+                height: 50px;
+            }
+            #startButton svg {
+                width: 30px;
+                height: 30px;
+            }
+        }
+        @media (min-width: 1025px) {
+            #countdownDisplay {
+                font-size: 100px;
+            }
+            #startButton {
+                width: 60px;
+                height: 60px;
+            }
+            #startButton svg {
+                width: 40px;
+                height: 40px;
+            }
+        }
     </style>
 </head>
 <body>
     <canvas id="background"></canvas>
-    <button id="startButton">
-        <svg width="30" height="30" viewBox="0 0 100 100">
-            <polygon points="20,10 80,50 20,90" fill="white"/>
-        </svg>
-    </button>
+    <div id="mainContainer">
+        <div id="countdownDisplay">3</div>
+        <button id="startButton">
+            <svg width="30" height="30" viewBox="0 0 100 100">
+                <polygon points="20,10 80,50 20,90" fill="white"/>
+            </svg>
+        </button>
+    </div>
     <script>
         const canvas = document.getElementById('background');
         const ctx = canvas.getContext('2d');
         const startButton = document.getElementById('startButton');
-        
+        const countdownDisplay = document.getElementById('countdownDisplay');
+
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
-        
+
         window.addEventListener('resize', () => {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
@@ -102,39 +166,32 @@
                 drawScene();
             }
         });
-        
+
         let countdown = 3;
         let countdownInterval = null;
         let isFlashing = false;
         let flashStartTime = null;
+        let flashAnimationId = null;
         let audioContext;
         let analyser;
         let microphone;
-        
-        const alertSound = new Audio('https://taira-komori.jpn.org/sound_os2/arms01/destruction1.mp3');
-        
-        function drawCountdown() {
-            ctx.font = 'bold 100px Arial';
-            ctx.fillStyle = 'white';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.shadowColor = 'black';
-            ctx.shadowBlur = 10;
-            ctx.shadowOffsetX = 5;
-            ctx.shadowOffsetY = 5;
-            ctx.fillText(countdown, canvas.width / 2, canvas.height / 2);
-        }
-        
+        let alertBuffer;
+
+        const backgroundImage = new Image();
+        backgroundImage.src = 'https://i.ibb.co/SDDYywMZ/image.png';
+        backgroundImage.onload = function() {
+            drawScene();
+        };
+
         function drawScene() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-            gradient.addColorStop(0, '#87CEEB');
-            gradient.addColorStop(1, '#FFFFFF');
-            ctx.fillStyle = gradient;
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            drawCountdown();
+            ctx.drawImage(backgroundImage, 0, 0, canvas.width, canvas.height);
         }
-        
+
+        function updateCountdownDisplay() {
+            countdownDisplay.textContent = countdown;
+        }
+
         async function initAudio() {
             if (!audioContext) {
                 audioContext = new AudioContext();
@@ -148,16 +205,21 @@
                     console.error('Error accessing microphone:', err);
                     alert('無法訪問麥克風，聲音檢測功能將不可用。');
                 }
+                fetch('https://taira-komori.jpn.org/sound_os2/arms01/destruction1.mp3')
+                    .then(response => response.arrayBuffer())
+                    .then(arrayBuffer => audioContext.decodeAudioData(arrayBuffer))
+                    .then(buffer => {
+                        alertBuffer = buffer;
+                    })
+                    .catch(error => console.error('Error loading alert sound:', error));
             }
         }
-        
+
         function resetCountdown() {
             countdown = 3;
-            if (!isFlashing) {
-                drawScene();
-            }
+            updateCountdownDisplay();
         }
-        
+
         function checkSound() {
             if (!analyser || !countdownInterval) return;
             const dataArray = new Uint8Array(analyser.fftSize);
@@ -168,12 +230,12 @@
                 sum += val * val;
             }
             const rms = Math.sqrt(sum / dataArray.length);
-            if (rms > 0.05) { // 可根據環境調整此閾值
+            if (rms > 0.05) {
                 resetCountdown();
             }
             requestAnimationFrame(checkSound);
         }
-        
+
         function flashScreen(timestamp) {
             if (!flashStartTime) flashStartTime = timestamp;
             const elapsed = timestamp - flashStartTime;
@@ -182,26 +244,36 @@
             ctx.fillStyle = `rgba(255, 0, 0, ${alpha})`;
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             if (isFlashing) {
-                requestAnimationFrame(flashScreen);
+                flashAnimationId = requestAnimationFrame(flashScreen);
             }
         }
-        
+
         function triggerAlert() {
-            console.log('Triggering alert'); // 確認函數被調用
-            alertSound.play().catch(error => {
-                console.error('Error playing sound:', error); // 捕獲播放錯誤
-            });
+            console.log('Triggering alert');
+            if (alertBuffer) {
+                const source = audioContext.createBufferSource();
+                source.buffer = alertBuffer;
+                source.connect(audioContext.destination);
+                source.start(0);
+            } else {
+                console.error('Alert sound not loaded');
+            }
             isFlashing = true;
-            requestAnimationFrame(flashScreen);
+            flashStartTime = null;
+            flashAnimationId = requestAnimationFrame(flashScreen);
         }
-        
+
         async function startCountdown() {
-            console.log('Start button clicked'); // 確認按鈕點擊
+            console.log('Start button clicked');
             if (!audioContext) {
                 await initAudio();
             }
             if (isFlashing) {
                 isFlashing = false;
+                if (flashAnimationId) {
+                    cancelAnimationFrame(flashAnimationId);
+                    flashAnimationId = null;
+                }
                 flashStartTime = null;
                 drawScene();
             }
@@ -210,12 +282,10 @@
                 countdownInterval = null;
             }
             countdown = 3;
-            drawScene();
+            updateCountdownDisplay();
             countdownInterval = setInterval(() => {
                 countdown--;
-                if (!isFlashing) {
-                    drawScene();
-                }
+                updateCountdownDisplay();
                 if (countdown <= 0) {
                     clearInterval(countdownInterval);
                     countdownInterval = null;
@@ -224,11 +294,11 @@
             }, 1000);
             requestAnimationFrame(checkSound);
         }
-        
+
         startButton.addEventListener('click', startCountdown);
-        
-        // 初始繪製
+
         drawScene();
+        updateCountdownDisplay();
     </script>
 </body>
 </html>
