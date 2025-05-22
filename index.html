@@ -102,12 +102,12 @@
                 min-width: 200px;
             }
             #countdownDisplay {
-                font-size: 15vw; /* 使用相對單位放大 */
+                font-size: 15vw;
             }
             #startButton {
                 width: 10vw;
                 height: 10vw;
-                min-width: 60px; /* 設置最小尺寸 */
+                min-width: 60px;
                 min-height: 60px;
             }
             #startButton svg {
@@ -148,13 +148,45 @@
 <body>
     <canvas id="background"></canvas>
     <div id="mainContainer">
-        <div id="countdownDisplay">3</div>
+        <div id="countdownDisplay">5</div>
         <button id="startButton">
             <svg width="30" height="30" viewBox="0 0 100 100">
                 <polygon points="20,10 80,50 20,90" fill="white"/>
             </svg>
         </button>
     </div>
+    <script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex));
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+    </script>
     <script>
         const canvas = document.getElementById('background');
         const ctx = canvas.getContext('2d');
@@ -172,7 +204,7 @@
             }
         });
 
-        let countdown = 3;
+        let countdown = 5;  // 修改為5秒
         let countdownInterval = null;
         let isFlashing = false;
         let flashStartTime = null;
@@ -183,7 +215,7 @@
         let alertBuffer;
 
         const backgroundImage = new Image();
-        backgroundImage.src = 'https://i.ibb.co/SDDYywMZ/image.png';
+        backgroundImage.src = 'https://i.ibb.co/HLY5RCcR/image.png';
         backgroundImage.onload = function() {
             drawScene();
         };
@@ -238,7 +270,7 @@
         }
 
         function resetCountdown() {
-            countdown = 3;
+            countdown = 5;  // 修改為5秒
             updateCountdownDisplay();
         }
 
@@ -303,7 +335,7 @@
                 clearInterval(countdownInterval);
                 countdownInterval = null;
             }
-            countdown = 3;
+            countdown = 5;  // 修改為5秒
             updateCountdownDisplay();
             countdownInterval = setInterval(() => {
                 countdown--;
